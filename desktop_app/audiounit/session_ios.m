@@ -1,14 +1,17 @@
 // 只有 iOS 构建时才会被 cgo 编译进包里。
 // TARGET_OS_IPHONE 守卫是双保险：万一被别的 Apple 平台（macOS/tvOS）
 // 拉进来，也不会误改桌面端的音频会话。
+//
+// 注意：必须用 #import 而不是 @import。cgo 传给 clang 的参数里没有
+// -fmodules，@import 会直接报 "use of '@import' when modules are
+// disabled" 导致编译失败。framework 的链接由 session_ios.go 里的
+// #cgo LDFLAGS: -framework AVFoundation 负责。
 
 #include <TargetConditionals.h>
 
 #if defined(__APPLE__) && TARGET_OS_IPHONE
 
-// 用 @import 让 clang modules 自动带上 framework 链接信息；
-// cgo 侧也已显式声明 -framework AVFoundation，双保险。
-@import AVFoundation;
+#import <AVFoundation/AVFoundation.h>
 
 int music_dl_configure_playback_audio_session(void) {
     AVAudioSession *session = [AVAudioSession sharedInstance];
