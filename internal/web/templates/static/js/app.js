@@ -9030,6 +9030,27 @@ window.musicDlAIPlayerControl = function (command) {
 function handleAIPlayerCommand(command) {
   const target = String(command?.client_id || "").trim();
   if (target && target !== AI_PLAYER_CLIENT_ID) return;
+  const action = String(command?.action || "").toLowerCase();
+  // Commands arriving on the AI event stream are asynchronous and may be
+  // emitted long after the page action that created them.  They must not
+  // steal the audio session from a song the user is already listening to.
+  // Volume and speed are deliberately allowed because they do not replace,
+  // pause, or seek the active track.
+  const changesPlayback = new Set([
+    "play_song",
+    "play",
+    "pause",
+    "toggle",
+    "stop",
+    "next",
+    "previous",
+    "seek",
+  ]);
+  if (isUserPlaybackActive() && changesPlayback.has(action)) {
+    aiPlayerLastPlaybackError = "ignored background command while user playback is active";
+    void publishAIPlayerState();
+    return;
+  }
   const handled = window.musicDlAIPlayerControl(command);
   if (!handled) {
     aiPlayerLastPlaybackError =

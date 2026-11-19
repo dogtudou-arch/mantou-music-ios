@@ -80,6 +80,7 @@ func TestAppJSAutoSwitchInvalidSources(t *testing.T) {
 		"function pauseAutoSwitchInvalidSourcesForPlayback()",
 		"signal: controller.signal",
 		"pauseAutoSwitchInvalidSourcesForPlayback();",
+		"ignored background command while user playback is active",
 		`const requestIsStale =`,
 		`queueInspectSong(card, 0)`,
 		`prepareInspectRetry(card, retryDelay)`,
