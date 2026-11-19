@@ -9960,14 +9960,15 @@ function switchSource(btn, options = {}) {
 
   const duration = ds.duration || "";
   const url = `${API_ROOT}/switch_source?name=${encodeURIComponent(name)}&artist=${encodeURIComponent(artist)}&source=${encodeURIComponent(source)}&duration=${encodeURIComponent(duration)}`;
-  return fetch(url)
+  return fetch(url, { signal: options.signal })
     .then((r) => (r.ok ? r.json() : Promise.reject()))
     .then((song) => {
       updateCardWithSong(card, song);
       clearSongCardSelection(card, { deferToolbar: !!options.deferToolbar });
       return true;
     })
-    .catch(() => {
+    .catch((error) => {
+      if (error?.name === "AbortError") return false;
       if (!options.silent) {
         alert("换源失败，请稍后重试");
       }
@@ -10059,6 +10060,7 @@ async function expandPlaybackQueue({local, url, totalPages}) {
 }
 
 function playAllAndJumpTo(btn) {
+  pauseAutoSwitchInvalidSourcesForPlayback();
   const currentCard = btn.closest(".song-card");
   const allCards = Array.from(document.querySelectorAll(".song-card"));
   const clickedIndex = allCards.indexOf(currentCard);
@@ -10113,6 +10115,7 @@ let autoSwitchInvalidTimer = 0;
 let autoSwitchInvalidInProgress = false;
 let autoSwitchInvalidPending = false;
 let autoSwitchInvalidLastKey = "";
+let autoSwitchInvalidAbortController = null;
 
 function clearAutoSwitchInvalidTimer() {
   if (autoSwitchInvalidTimer) {
@@ -10120,6 +10123,18 @@ function clearAutoSwitchInvalidTimer() {
     autoSwitchInvalidTimer = 0;
   }
   autoSwitchInvalidPending = false;
+}
+
+function isUserPlaybackActive() {
+  return !!(ap?.list?.audios?.length && ap?.audio && ap.paused === false);
+}
+
+function pauseAutoSwitchInvalidSourcesForPlayback() {
+  clearAutoSwitchInvalidTimer();
+  if (autoSwitchInvalidAbortController) {
+    autoSwitchInvalidAbortController.abort();
+    autoSwitchInvalidAbortController = null;
+  }
 }
 
 function resetAutoSwitchInvalidState() {
@@ -10226,7 +10241,7 @@ function selectInvalidSongCards(options = {}) {
 function scheduleAutoSwitchInvalidSources(
   delay = AUTO_SWITCH_INVALID_DELAY_MS,
 ) {
-  if (!isAutoSwitchInvalidSourcesEnabled()) return;
+  if (!isAutoSwitchInvalidSourcesEnabled() || isUserPlaybackActive()) return;
   if (autoSwitchInvalidInProgress) {
     autoSwitchInvalidPending = true;
     return;
@@ -10242,7 +10257,7 @@ function scheduleAutoSwitchInvalidSources(
 }
 
 async function autoSwitchInvalidSources() {
-  if (!isAutoSwitchInvalidSourcesEnabled()) return false;
+  if (!isAutoSwitchInvalidSourcesEnabled() || isUserPlaybackActive()) return false;
   if (autoSwitchInvalidInProgress) {
     autoSwitchInvalidPending = true;
     return false;
@@ -10265,6 +10280,8 @@ async function autoSwitchInvalidSources() {
   nextCard.dataset.autoSwitchInvalidAttempted = "1";
 
   autoSwitchInvalidInProgress = true;
+  const controller = new AbortController();
+  autoSwitchInvalidAbortController = controller;
   showToast(
     "自动换源",
     `检测到 ${invalidCards.length} 首无效歌曲，正在逐首后台换源`,
@@ -10277,9 +10294,13 @@ async function autoSwitchInvalidSources() {
       silent: true,
       auto: true,
       cards: [nextCard],
+      signal: controller.signal,
     });
     return true;
   } finally {
+    if (autoSwitchInvalidAbortController === controller) {
+      autoSwitchInvalidAbortController = null;
+    }
     autoSwitchInvalidInProgress = false;
     // Yield between songs.  Automatic repair deliberately never launches
     // parallel source lookups; manual batch switching remains unchanged.
@@ -10764,6 +10785,7 @@ async function batchSwitchSource(options = {}) {
         await switchSource(switchBtn, {
           silent: !!options.silent,
           deferToolbar: true,
+          signal: options.signal,
         });
       }
     }
@@ -11548,6 +11570,20 @@ let restoringPlaybackSession = false;
 let playbackSessionRevision = 0;
 let playbackSessionSavePending = false;
 let playbackSessionStorageWarning = false;
+let playbackSessionRestoreBlocked = false;
+
+function blockPlaybackSessionRestore() {
+  playbackSessionRestoreBlocked = true;
+  // Prevent a late IndexedDB result from replacing a playlist chosen by the user.
+  playbackSessionRevision++;
+}
+
+["pointerdown", "keydown"].forEach((eventName) => {
+  document.addEventListener(eventName, blockPlaybackSessionRestore, {
+    once: true,
+    capture: true,
+  });
+});
 
 function playbackSessionDB() {
   if (!playbackSessionDBPromise) {
@@ -11628,11 +11664,17 @@ function schedulePlaybackSessionSave() {
 
 async function restorePlaybackSession() {
   if (!ap?.list) return;
+  if (playbackSessionRestoreBlocked) return;
   const revision = playbackSessionRevision;
   try {
     const session = await readPlaybackSession();
     // Never replace a playlist selected while the asynchronous read was pending.
-    if (revision !== playbackSessionRevision || ap.list.audios.length) return;
+    if (
+      playbackSessionRestoreBlocked ||
+      revision !== playbackSessionRevision ||
+      ap.list.audios.length
+    )
+      return;
     if (session?.version !== 1 || !Array.isArray(session.songs)) return;
     const songs = session.songs.filter(song => song && typeof song.id === "string" && song.id && typeof song.source === "string" && song.source);
     if (!songs.length) return;
