@@ -4713,7 +4713,16 @@ async function inspectSong(card, controller = null) {
       throw new Error("invalid inspect response");
     }
 
-    if (data.song && typeof data.song === "object") {
+    const inspectingCurrentPlayback =
+      card.dataset.id === String(currentPlayingId || "") &&
+      ap?.audio &&
+      !ap.audio.paused;
+    if (data.song && typeof data.song === "object" && !inspectingCurrentPlayback) {
+      // Inspecting a song may fill in richer metadata.  Do not apply that
+      // metadata to the active audio entry: syncSongToAPlayer would call
+      // APlayer.list.switch(), which reloads the stream and iOS/Android
+      // WebViews can reject the follow-up play because it is no longer a
+      // direct user gesture.
       updateCardWithSong(card, data.song, { inspect: false });
     }
 

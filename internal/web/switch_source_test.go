@@ -76,6 +76,7 @@ func TestAppJSAutoSwitchInvalidSources(t *testing.T) {
 		`card.dataset.previewOnly === "1"`,
 		`tag-success tag-preview`,
 		`试听可用，不会自动换源`,
+		"const inspectingCurrentPlayback =",
 		`const requestIsStale =`,
 		`queueInspectSong(card, 0)`,
 		`prepareInspectRetry(card, retryDelay)`,
