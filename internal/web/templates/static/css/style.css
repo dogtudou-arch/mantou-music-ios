@@ -3649,8 +3649,11 @@ html[data-theme="dark"] .queue-secondary-action {
     /* 手机端底部播放器始终展开并贴紧屏幕底部，不保留收缩箭头。 */
     .aplayer.aplayer-fixed {
         /* 贴住应用安全区底边，不压入 iPhone 手势条或安卓导航区域。 */
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
+        bottom: env(safe-area-inset-bottom, 0px) !important;
         transform: none !important;
+        /* 覆盖其下方的歌曲列表，避免底图透出播放器。 */
+        background: #effcf7 !important;
+        box-shadow: 0 -8px 24px rgba(16, 185, 129, 0.16) !important;
     }
     .aplayer.aplayer-fixed .aplayer-miniswitcher {
         display: none !important;
@@ -3661,6 +3664,8 @@ html[data-theme="dark"] .queue-secondary-action {
         min-height: 96px;
         padding-right: 0 !important;
         border-radius: 0 !important;
+        background: #effcf7 !important;
+        opacity: 1 !important;
     }
     .aplayer.aplayer-fixed.aplayer-narrow .aplayer-info {
         display: block !important;

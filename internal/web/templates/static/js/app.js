@@ -9,7 +9,10 @@ const INSPECT_SOURCE_MIN_CONCURRENCY = 4;
 const INSPECT_RETRY_BASE_DELAY_MS = 1200;
 const INSPECT_RETRY_MAX_DELAY_MS = 30000;
 const INSPECT_MAX_RETRIES = 2;
-const AUTO_SWITCH_INVALID_DELAY_MS = 500;
+// Keep automatic source repair out of the way of the song the user just chose.
+// A short quiet period also avoids competing with the initial playback request.
+const AUTO_SWITCH_INVALID_DELAY_MS = 2000;
+const AUTO_SWITCH_INVALID_NEXT_DELAY_MS = 1200;
 const DEFAULT_WEB_PAGE_SIZE = 50;
 const DEFAULT_CLI_PAGE_SIZE = 20;
 const LOCAL_MUSIC_SOURCE = "local";
@@ -10238,18 +10241,24 @@ async function autoSwitchInvalidSources() {
   const invalidCards = getInvalidSongCards();
   if (invalidCards.length === 0) return false;
 
-  const key = invalidSongCardsKey(invalidCards);
+  // Never replace the source of the current song in the background.  It may
+  // already be playing perfectly well even if an earlier inspection failed.
+  // Other failed songs are repaired one at a time after it, so listening is
+  // not held up by a whole-page batch operation.
+  const nextCard = invalidCards.find(
+    (card) => String(card.dataset.id || "") !== String(currentPlayingId || ""),
+  );
+  if (!nextCard) return false;
+
+  const key = invalidSongCardsKey([nextCard]);
   if (key && key === autoSwitchInvalidLastKey) return false;
   autoSwitchInvalidLastKey = key;
-  invalidCards.forEach((card) => {
-    card.dataset.autoSwitchInvalidAttempted = "1";
-  });
+  nextCard.dataset.autoSwitchInvalidAttempted = "1";
 
-  selectInvalidSongCards({ silent: true, cards: invalidCards });
   autoSwitchInvalidInProgress = true;
   showToast(
     "自动换源",
-    `检测到 ${invalidCards.length} 首无效歌曲，正在批量换源`,
+    `检测到 ${invalidCards.length} 首无效歌曲，正在逐首后台换源`,
     "info",
     3500,
   );
@@ -10258,15 +10267,15 @@ async function autoSwitchInvalidSources() {
       skipConfirm: true,
       silent: true,
       auto: true,
-      cards: invalidCards,
+      cards: [nextCard],
     });
     return true;
   } finally {
     autoSwitchInvalidInProgress = false;
-    if (autoSwitchInvalidPending) {
-      autoSwitchInvalidPending = false;
-      scheduleAutoSwitchInvalidSources();
-    }
+    // Yield between songs.  Automatic repair deliberately never launches
+    // parallel source lookups; manual batch switching remains unchanged.
+    autoSwitchInvalidPending = false;
+    scheduleAutoSwitchInvalidSources(AUTO_SWITCH_INVALID_NEXT_DELAY_MS);
   }
 }
 
