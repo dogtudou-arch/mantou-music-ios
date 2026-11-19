@@ -775,6 +775,9 @@ func (a *desktopApp) handleWebViewState(state string) {
 func (a *desktopApp) handlePlaybackState(state string) {
 	switch strings.TrimSpace(state) {
 	case "playing":
+		if code := audiounit.ReassertPlaybackAudioSession(); code != 0 {
+			log.Printf("reassert iOS playback audio session failed: code=%d", code)
+		}
 		a.playbackActive = true
 		a.reloadPending = false
 		a.reloadDeferred = false

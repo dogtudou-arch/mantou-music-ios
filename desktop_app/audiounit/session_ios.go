@@ -4,9 +4,10 @@ package audiounit
 
 /*
 // #import 不会像 @import 那样自动链接 framework，必须显式声明。
-#cgo LDFLAGS: -framework AVFoundation
+#cgo LDFLAGS: -framework AVFoundation -framework UIKit
 #include <TargetConditionals.h>
 int music_dl_configure_playback_audio_session(void);
+int music_dl_reassert_playback_audio_session(void);
 */
 import "C"
 
@@ -22,4 +23,11 @@ import "C"
 // 返回 0 表示成功；非 0 是 NSError.code（-1 / -2 表示没有 error 对象）。
 func ConfigurePlaybackAudioSession() int {
 	return int(C.music_dl_configure_playback_audio_session())
+}
+
+// ReassertPlaybackAudioSession 在 WebView 开始播放及 App 进入后台时重申
+// Playback 会话。WKWebView 可能在这些时机修改 App 的音频会话；若不重申，
+// 播放进度会继续而实际声音会被系统静音。
+func ReassertPlaybackAudioSession() int {
+	return int(C.music_dl_reassert_playback_audio_session())
 }

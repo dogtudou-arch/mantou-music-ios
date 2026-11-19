@@ -12,8 +12,9 @@
 #if defined(__APPLE__) && TARGET_OS_IPHONE
 
 #import <AVFoundation/AVFoundation.h>
+#import <UIKit/UIKit.h>
 
-int music_dl_configure_playback_audio_session(void) {
+static int music_dl_apply_playback_audio_session(void) {
     AVAudioSession *session = [AVAudioSession sharedInstance];
     NSError *error = nil;
 
@@ -33,9 +34,49 @@ int music_dl_configure_playback_audio_session(void) {
     return 0;
 }
 
+static void music_dl_observe_audio_session(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+        void (^reassert)(NSNotification *) = ^(NSNotification *note) {
+            (void)note;
+            music_dl_apply_playback_audio_session();
+        };
+
+        // WKWebView may reconfigure AVAudioSession while becoming inactive.
+        // Reassert Playback at the lifecycle boundary before iOS silences the
+        // WebView audio output in the background.
+        [center addObserverForName:UIApplicationDidEnterBackgroundNotification
+                            object:nil
+                             queue:[NSOperationQueue mainQueue]
+                        usingBlock:reassert];
+        [center addObserverForName:AVAudioSessionRouteChangeNotification
+                            object:nil
+                             queue:[NSOperationQueue mainQueue]
+                        usingBlock:reassert];
+        [center addObserverForName:AVAudioSessionInterruptionNotification
+                            object:nil
+                             queue:[NSOperationQueue mainQueue]
+                        usingBlock:reassert];
+    });
+}
+
+int music_dl_configure_playback_audio_session(void) {
+    music_dl_observe_audio_session();
+    return music_dl_apply_playback_audio_session();
+}
+
+int music_dl_reassert_playback_audio_session(void) {
+    return music_dl_apply_playback_audio_session();
+}
+
 #else
 
 int music_dl_configure_playback_audio_session(void) {
+    return 0;
+}
+
+int music_dl_reassert_playback_audio_session(void) {
     return 0;
 }
 
