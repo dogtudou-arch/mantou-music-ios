@@ -539,7 +539,7 @@
 </div>
 
 <div id="editCollectionModal" class="modal-overlay" style="z-index: 1005;">
-    <div class="modal" style="max-width: 400px;">
+    <div class="modal collection-editor-modal">
         <div class="modal-header">
             <h3 id="editColTitle">新建歌单</h3>
             <div class="modal-close" onclick="document.getElementById('editCollectionModal').style.display='none'"><i class="fa-solid fa-xmark"></i></div>
@@ -558,6 +558,8 @@
                 <label>封面图片 (URL)</label>
                 <input type="text" id="editColCover" placeholder="留空则自动生成随机封面">
             </div>
+        </div>
+        <div class="collection-editor-footer">
             <button type="button" class="btn-save" onclick="saveCollection()">保存歌单</button>
         </div>
     </div>
