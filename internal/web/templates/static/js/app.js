@@ -9472,6 +9472,31 @@ if (ap && typeof ap.on === "function") {
     scheduleMediaSessionSync(getCurrentAPlayerAudio(), 180);
     KaraokeLyrics.hide();
   });
+
+  // APlayer normally advances the queue in its own ended handler. Some mobile
+  // WebViews reject the resulting programmatic play() call and leave the audio
+  // element at the end of the previous item. Retry only when that transition
+  // did not start, so normal desktop and mobile playback are unchanged.
+  ap.on("ended", () => {
+    const endedIndex = ap?.list?.index;
+    window.setTimeout(() => {
+      if (!ap?.audio || !ap?.list?.audios?.length) return;
+
+      const audio = ap.audio;
+      if (!audio.paused && !audio.ended) return;
+
+      if (audio.ended && ap.list.index === endedIndex) {
+        ap.skipForward();
+      }
+
+      const retry = ap.audio.play();
+      if (retry && typeof retry.catch === "function") {
+        retry.catch((error) => {
+          console.warn("[musicdl] automatic next-track playback was rejected", error);
+        });
+      }
+    }, 80);
+  });
 }
 
 function highlightCard(targetId) {
