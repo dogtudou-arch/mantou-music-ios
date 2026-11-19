@@ -2,11 +2,6 @@ module github.com/guohuiyuan/go-music-dl
 
 go 1.25.1
 
-// Keep the mobile WebView policy in source control. The upstream default
-// requires a user gesture for media playback on some Android/iOS versions,
-// which prevents APlayer from starting the next item at the end of a track.
-replace github.com/gioui-plugins/gio-plugins => ./third_party/gio-plugins
-
 require (
 	gioui.org v0.9.1-0.20251215212054-7bcb315ee174
 	git.wow.st/gmp/jni v0.0.0-20210610011705-34026c7e22d0

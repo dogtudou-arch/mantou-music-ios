@@ -9,10 +9,7 @@ const INSPECT_SOURCE_MIN_CONCURRENCY = 4;
 const INSPECT_RETRY_BASE_DELAY_MS = 1200;
 const INSPECT_RETRY_MAX_DELAY_MS = 30000;
 const INSPECT_MAX_RETRIES = 2;
-// Keep automatic source repair out of the way of the song the user just chose.
-// A short quiet period also avoids competing with the initial playback request.
-const AUTO_SWITCH_INVALID_DELAY_MS = 2000;
-const AUTO_SWITCH_INVALID_NEXT_DELAY_MS = 1200;
+const AUTO_SWITCH_INVALID_DELAY_MS = 500;
 const DEFAULT_WEB_PAGE_SIZE = 50;
 const DEFAULT_CLI_PAGE_SIZE = 20;
 const LOCAL_MUSIC_SOURCE = "local";
@@ -4713,16 +4710,7 @@ async function inspectSong(card, controller = null) {
       throw new Error("invalid inspect response");
     }
 
-    const inspectingCurrentPlayback =
-      card.dataset.id === String(currentPlayingId || "") &&
-      ap?.audio &&
-      !ap.audio.paused;
-    if (data.song && typeof data.song === "object" && !inspectingCurrentPlayback) {
-      // Inspecting a song may fill in richer metadata.  Do not apply that
-      // metadata to the active audio entry: syncSongToAPlayer would call
-      // APlayer.list.switch(), which reloads the stream and iOS/Android
-      // WebViews can reject the follow-up play because it is no longer a
-      // direct user gesture.
+    if (data.song && typeof data.song === "object") {
       updateCardWithSong(card, data.song, { inspect: false });
     }
 
@@ -9030,27 +9018,6 @@ window.musicDlAIPlayerControl = function (command) {
 function handleAIPlayerCommand(command) {
   const target = String(command?.client_id || "").trim();
   if (target && target !== AI_PLAYER_CLIENT_ID) return;
-  const action = String(command?.action || "").toLowerCase();
-  // Commands arriving on the AI event stream are asynchronous and may be
-  // emitted long after the page action that created them.  They must not
-  // steal the audio session from a song the user is already listening to.
-  // Volume and speed are deliberately allowed because they do not replace,
-  // pause, or seek the active track.
-  const changesPlayback = new Set([
-    "play_song",
-    "play",
-    "pause",
-    "toggle",
-    "stop",
-    "next",
-    "previous",
-    "seek",
-  ]);
-  if (isUserPlaybackActive() && changesPlayback.has(action)) {
-    aiPlayerLastPlaybackError = "ignored background command while user playback is active";
-    void publishAIPlayerState();
-    return;
-  }
   const handled = window.musicDlAIPlayerControl(command);
   if (!handled) {
     aiPlayerLastPlaybackError =
@@ -9505,31 +9472,6 @@ if (ap && typeof ap.on === "function") {
     scheduleMediaSessionSync(getCurrentAPlayerAudio(), 180);
     KaraokeLyrics.hide();
   });
-
-  // APlayer normally advances the queue in its own ended handler. Some mobile
-  // WebViews reject the resulting programmatic play() call and leave the audio
-  // element at the end of the previous item. Retry only when that transition
-  // did not start, so normal desktop and mobile playback are unchanged.
-  ap.on("ended", () => {
-    const endedIndex = ap?.list?.index;
-    window.setTimeout(() => {
-      if (!ap?.audio || !ap?.list?.audios?.length) return;
-
-      const audio = ap.audio;
-      if (!audio.paused && !audio.ended) return;
-
-      if (audio.ended && ap.list.index === endedIndex) {
-        ap.skipForward();
-      }
-
-      const retry = ap.audio.play();
-      if (retry && typeof retry.catch === "function") {
-        retry.catch((error) => {
-          console.warn("[musicdl] automatic next-track playback was rejected", error);
-        });
-      }
-    }, 80);
-  });
 }
 
 function highlightCard(targetId) {
@@ -9981,15 +9923,14 @@ function switchSource(btn, options = {}) {
 
   const duration = ds.duration || "";
   const url = `${API_ROOT}/switch_source?name=${encodeURIComponent(name)}&artist=${encodeURIComponent(artist)}&source=${encodeURIComponent(source)}&duration=${encodeURIComponent(duration)}`;
-  return fetch(url, { signal: options.signal })
+  return fetch(url)
     .then((r) => (r.ok ? r.json() : Promise.reject()))
     .then((song) => {
       updateCardWithSong(card, song);
       clearSongCardSelection(card, { deferToolbar: !!options.deferToolbar });
       return true;
     })
-    .catch((error) => {
-      if (error?.name === "AbortError") return false;
+    .catch(() => {
       if (!options.silent) {
         alert("换源失败，请稍后重试");
       }
@@ -10081,7 +10022,6 @@ async function expandPlaybackQueue({local, url, totalPages}) {
 }
 
 function playAllAndJumpTo(btn) {
-  pauseAutoSwitchInvalidSourcesForPlayback();
   const currentCard = btn.closest(".song-card");
   const allCards = Array.from(document.querySelectorAll(".song-card"));
   const clickedIndex = allCards.indexOf(currentCard);
@@ -10136,7 +10076,6 @@ let autoSwitchInvalidTimer = 0;
 let autoSwitchInvalidInProgress = false;
 let autoSwitchInvalidPending = false;
 let autoSwitchInvalidLastKey = "";
-let autoSwitchInvalidAbortController = null;
 
 function clearAutoSwitchInvalidTimer() {
   if (autoSwitchInvalidTimer) {
@@ -10144,18 +10083,6 @@ function clearAutoSwitchInvalidTimer() {
     autoSwitchInvalidTimer = 0;
   }
   autoSwitchInvalidPending = false;
-}
-
-function isUserPlaybackActive() {
-  return !!(ap?.list?.audios?.length && ap?.audio && ap.paused === false);
-}
-
-function pauseAutoSwitchInvalidSourcesForPlayback() {
-  clearAutoSwitchInvalidTimer();
-  if (autoSwitchInvalidAbortController) {
-    autoSwitchInvalidAbortController.abort();
-    autoSwitchInvalidAbortController = null;
-  }
 }
 
 function resetAutoSwitchInvalidState() {
@@ -10262,7 +10189,7 @@ function selectInvalidSongCards(options = {}) {
 function scheduleAutoSwitchInvalidSources(
   delay = AUTO_SWITCH_INVALID_DELAY_MS,
 ) {
-  if (!isAutoSwitchInvalidSourcesEnabled() || isUserPlaybackActive()) return;
+  if (!isAutoSwitchInvalidSourcesEnabled()) return;
   if (autoSwitchInvalidInProgress) {
     autoSwitchInvalidPending = true;
     return;
@@ -10278,7 +10205,7 @@ function scheduleAutoSwitchInvalidSources(
 }
 
 async function autoSwitchInvalidSources() {
-  if (!isAutoSwitchInvalidSourcesEnabled() || isUserPlaybackActive()) return false;
+  if (!isAutoSwitchInvalidSourcesEnabled()) return false;
   if (autoSwitchInvalidInProgress) {
     autoSwitchInvalidPending = true;
     return false;
@@ -10286,26 +10213,18 @@ async function autoSwitchInvalidSources() {
   const invalidCards = getInvalidSongCards();
   if (invalidCards.length === 0) return false;
 
-  // Never replace the source of the current song in the background.  It may
-  // already be playing perfectly well even if an earlier inspection failed.
-  // Other failed songs are repaired one at a time after it, so listening is
-  // not held up by a whole-page batch operation.
-  const nextCard = invalidCards.find(
-    (card) => String(card.dataset.id || "") !== String(currentPlayingId || ""),
-  );
-  if (!nextCard) return false;
-
-  const key = invalidSongCardsKey([nextCard]);
+  const key = invalidSongCardsKey(invalidCards);
   if (key && key === autoSwitchInvalidLastKey) return false;
   autoSwitchInvalidLastKey = key;
-  nextCard.dataset.autoSwitchInvalidAttempted = "1";
+  invalidCards.forEach((card) => {
+    card.dataset.autoSwitchInvalidAttempted = "1";
+  });
 
+  selectInvalidSongCards({ silent: true, cards: invalidCards });
   autoSwitchInvalidInProgress = true;
-  const controller = new AbortController();
-  autoSwitchInvalidAbortController = controller;
   showToast(
     "自动换源",
-    `检测到 ${invalidCards.length} 首无效歌曲，正在逐首后台换源`,
+    `检测到 ${invalidCards.length} 首无效歌曲，正在批量换源`,
     "info",
     3500,
   );
@@ -10314,19 +10233,15 @@ async function autoSwitchInvalidSources() {
       skipConfirm: true,
       silent: true,
       auto: true,
-      cards: [nextCard],
-      signal: controller.signal,
+      cards: invalidCards,
     });
     return true;
   } finally {
-    if (autoSwitchInvalidAbortController === controller) {
-      autoSwitchInvalidAbortController = null;
-    }
     autoSwitchInvalidInProgress = false;
-    // Yield between songs.  Automatic repair deliberately never launches
-    // parallel source lookups; manual batch switching remains unchanged.
-    autoSwitchInvalidPending = false;
-    scheduleAutoSwitchInvalidSources(AUTO_SWITCH_INVALID_NEXT_DELAY_MS);
+    if (autoSwitchInvalidPending) {
+      autoSwitchInvalidPending = false;
+      scheduleAutoSwitchInvalidSources();
+    }
   }
 }
 
@@ -10806,7 +10721,6 @@ async function batchSwitchSource(options = {}) {
         await switchSource(switchBtn, {
           silent: !!options.silent,
           deferToolbar: true,
-          signal: options.signal,
         });
       }
     }
@@ -11591,20 +11505,6 @@ let restoringPlaybackSession = false;
 let playbackSessionRevision = 0;
 let playbackSessionSavePending = false;
 let playbackSessionStorageWarning = false;
-let playbackSessionRestoreBlocked = false;
-
-function blockPlaybackSessionRestore() {
-  playbackSessionRestoreBlocked = true;
-  // Prevent a late IndexedDB result from replacing a playlist chosen by the user.
-  playbackSessionRevision++;
-}
-
-["pointerdown", "keydown"].forEach((eventName) => {
-  document.addEventListener(eventName, blockPlaybackSessionRestore, {
-    once: true,
-    capture: true,
-  });
-});
 
 function playbackSessionDB() {
   if (!playbackSessionDBPromise) {
@@ -11685,17 +11585,11 @@ function schedulePlaybackSessionSave() {
 
 async function restorePlaybackSession() {
   if (!ap?.list) return;
-  if (playbackSessionRestoreBlocked) return;
   const revision = playbackSessionRevision;
   try {
     const session = await readPlaybackSession();
     // Never replace a playlist selected while the asynchronous read was pending.
-    if (
-      playbackSessionRestoreBlocked ||
-      revision !== playbackSessionRevision ||
-      ap.list.audios.length
-    )
-      return;
+    if (revision !== playbackSessionRevision || ap.list.audios.length) return;
     if (session?.version !== 1 || !Array.isArray(session.songs)) return;
     const songs = session.songs.filter(song => song && typeof song.id === "string" && song.id && typeof song.source === "string" && song.source);
     if (!songs.length) return;

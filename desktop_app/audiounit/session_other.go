@@ -8,8 +8,3 @@ package audiounit
 func ConfigurePlaybackAudioSession() int {
 	return 0
 }
-
-// ReassertPlaybackAudioSession 在非 iOS 平台不需要处理。
-func ReassertPlaybackAudioSession() int {
-	return 0
-}

@@ -489,22 +489,9 @@
 
 /* 手机端防拥挤适配 */
 @media (max-width: 768px) {
-    /* 手机端不提供独立音量控制，避免播放器卡片拥挤。 */
-    .vg-vol-group { display: none; }
-    .vg-info { min-height: 216px; padding: 16px 18px; }
-    .vg-playback-row { min-height: 62px; gap: 18px; margin-top: 18px; }
-    .vg-playback-row > .vg-ctrl-icon {
-        width: 42px;
-        height: 42px;
-        font-size: 20px;
-    }
-    .vg-playback-row > .vg-play-center {
-        flex-basis: 58px;
-        width: 58px;
-        height: 58px;
-        margin: 0 8px;
-        font-size: 24px;
-    }
+    .vg-vol-group { margin-left: 10px; padding-left: 10px; }
+    .vg-vol-group input[type="range"] { width: clamp(52px, 16vw, 60px); }
+    .vg-play-center { margin: 0 5px; }
     .vg-track-actions { gap: 4px; margin-left: 2px; }
     .vg-track-action { width: 28px; height: 28px; }
 }

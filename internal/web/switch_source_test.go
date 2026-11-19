@@ -56,11 +56,7 @@ func TestAppJSAutoSwitchInvalidSources(t *testing.T) {
 		"function scheduleAutoSwitchInvalidSources",
 		"async function autoSwitchInvalidSources()",
 		`card.dataset.autoSwitchInvalidAttempted = "1"`,
-		"const AUTO_SWITCH_INVALID_NEXT_DELAY_MS = 1200",
-		"const nextCard = invalidCards.find(",
-		"cards: [nextCard]",
-		"正在逐首后台换源",
-		"scheduleAutoSwitchInvalidSources(AUTO_SWITCH_INVALID_NEXT_DELAY_MS)",
+		"selectInvalidSongCards({ silent: true, cards: invalidCards })",
 		"await batchSwitchSource({",
 		`document.querySelector(".tag-fail")`,
 		`card.dataset.inspectPending = "1"`,
@@ -76,11 +72,6 @@ func TestAppJSAutoSwitchInvalidSources(t *testing.T) {
 		`card.dataset.previewOnly === "1"`,
 		`tag-success tag-preview`,
 		`试听可用，不会自动换源`,
-		"const inspectingCurrentPlayback =",
-		"function pauseAutoSwitchInvalidSourcesForPlayback()",
-		"signal: controller.signal",
-		"pauseAutoSwitchInvalidSourcesForPlayback();",
-		"ignored background command while user playback is active",
 		`const requestIsStale =`,
 		`queueInspectSong(card, 0)`,
 		`prepareInspectRetry(card, retryDelay)`,
@@ -100,9 +91,6 @@ func TestAppJSAutoSwitchInvalidSources(t *testing.T) {
 	}
 	if !strings.Contains(js, "if (autoSwitchInvalidTimer) return;") {
 		t.Fatal("auto source switching should be throttled instead of restarting its delay")
-	}
-	if strings.Contains(js, "cards: invalidCards,") {
-		t.Fatal("automatic source switching must process only one song at a time")
 	}
 }
 
