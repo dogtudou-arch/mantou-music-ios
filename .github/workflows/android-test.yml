@@ -91,26 +91,24 @@ jobs:
         run: |
           .\.github\scripts\download_android_ffmpeg.ps1 -OutputRoot .\desktop_app\ffmpeg\android
 
-      - name: Decode Android signing keystore
-        shell: powershell
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      - name: Create test signing keystore
+        shell: cmd
         run: |
-          [IO.File]::WriteAllBytes("release.keystore", [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64))
+          keytool -genkeypair -keystore test.keystore -storepass android -keypass android -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
       - name: Build APK
         shell: cmd
         env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEYSTORE_FILE: ..\release.keystore
+          ANDROID_KEYSTORE_PASSWORD: android
+          ANDROID_KEYSTORE_FILE: ..\test.keystore
           MUSIC_DL_BUNDLE_ANDROID_FFMPEG: "1"
         run: |
           package_app.bat
 
-      - name: Remove Android signing keystore
+      - name: Remove test signing keystore
         if: always()
         shell: cmd
         run: |
-          del /q release.keystore
+          del /q test.keystore
 
       - name: Verify APK
         shell: cmd
