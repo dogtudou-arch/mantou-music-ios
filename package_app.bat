@@ -1,5 +1,6 @@
 @echo off
 setlocal EnableExtensions
+chcp 65001 >nul
 
 if "%ANDROID_HOME%"=="" set "ANDROID_HOME=C:\Android"
 set "ANDROID_SDK_ROOT=%ANDROID_HOME%"
@@ -113,9 +114,9 @@ echo Building!
  -buildmode exe ^
  -o ../music-dl.apk ^
  -appid com.musicdl.app.util ^
- -name MusicDL ^
+ -name "馒头音乐" ^
  -version %VERSION% ^
- -icon ../winres/icon_256x256.png ^
+ -icon ../winres/icon_android_256x256.png ^
  -slice ^
  -signkey "%ANDROID_KEYSTORE_FILE%" ^
  -signpass "%ANDROID_KEYSTORE_PASSWORD%" ^
