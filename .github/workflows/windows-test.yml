@@ -1,0 +1,41 @@
+name: Build Windows desktop EXE
+
+on:
+  push:
+    branches:
+      - codex/ios-background-audio
+    paths:
+      - .github/workflows/windows-test.yml
+      - desktop_go/**
+      - desktop/**
+      - internal/**
+      - winres/**
+  workflow_dispatch:
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Prepare Windows icon resources
+        shell: powershell
+        run: |
+          go install github.com/tc-hib/go-winres@latest
+          go generate ./...
+          go-winres make --in .\winres\desktop_go.winres.json --out .\desktop_go\rsrc
+      - name: Build Windows app
+        shell: powershell
+        run: |
+          go build -trimpath -ldflags "-H windowsgui -s -w" -o .\MantouMusic.exe ./desktop_go
+          if (!(Test-Path .\MantouMusic.exe)) { throw 'Windows EXE was not created' }
+          if ((Get-Item .\MantouMusic.exe).Length -lt 1000000) { throw 'Windows EXE is unexpectedly small' }
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: mantou-music-windows-exe
+          path: MantouMusic.exe

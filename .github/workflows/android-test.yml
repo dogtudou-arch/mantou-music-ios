@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - codex/ios-background-audio
+    paths:
+      - desktop_app/**
+      - internal/**
+      - winres/**
+      - package_app.bat
   workflow_dispatch:
 
 jobs:
