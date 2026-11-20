@@ -1285,18 +1285,26 @@ body.vg-open .aplayer.aplayer-fixed {
 .modal-close:hover { color: var(--error-color); }
 .modal-body { flex: 1; overflow-y: auto; }
 
-/* Keep the playlist action visible while the form scrolls on short screens. */
+/* Scroll the whole editor so older Android WebViews cannot hide its action. */
 #editCollectionModal { box-sizing: border-box; padding: 12px; }
 #editCollectionModal .collection-editor-modal {
     box-sizing: border-box;
     width: min(400px, 100%);
     max-height: calc(100vh - 24px);
     max-height: calc(100dvh - 24px);
-    min-height: 0;
+    display: block;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
-.collection-editor-modal .modal-body { min-height: 0; flex: 1 1 auto; }
-.collection-editor-footer { flex: 0 0 auto; padding-top: 10px; }
-.collection-editor-footer .btn-save { margin-top: 0; }
+#editCollectionModal .modal-body { display: block; overflow: visible; }
+.collection-editor-footer { display: block; padding-top: 10px; }
+.collection-editor-footer .btn-save {
+    display: block;
+    min-height: 46px;
+    margin-top: 0;
+    background: #059669;
+    color: #fff;
+}
 
 .scheduled-playback-overlay { z-index: 10020; padding: 16px; box-sizing: border-box; }
 .scheduled-playback-modal {
